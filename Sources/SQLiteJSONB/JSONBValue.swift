@@ -64,8 +64,12 @@ public struct JSONBValue {
         let payloadSize: Int = sizeBytes == 0
             ? Int(sizeType)
             : Int(unsignedBytes: buffer[index + 1 ..< payloadStart], order: .bigEndian)
-
-        payload = buffer[payloadStart ..< payloadStart + payloadSize]
+        
+        let payloadEnd = payloadStart + payloadSize
+        guard payloadEnd <= buffer.endIndex else {
+            throw JSONBError.invalidHeader
+        }
+        payload = buffer[payloadStart ..< payloadEnd]
     }
 
     init(from data: Data) throws {
