@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 extension JSONBValue {
     /// - Parameter keyPath: Decoding key path used to describe errors
@@ -31,13 +32,30 @@ extension JSONBValue {
 
     /// - Parameter keyPath: Decoding key path used to describe errors
     func decode(for keyPath: CodingKeyPath) throws -> Double {
+        try assert(isOneOf: Self.floats + Self.integers, decodingTo: Double.self, at: keyPath)
+        if SQLiteJSONBConfig.useFastFloatDecode,
+           let parsed = parseDouble(payload),
+           parsed.isFinite
+        {
+            return parsed
+        }
         let number: Float = try assertValue(isOneOf: Self.floats + Self.integers, at: keyPath)
         return Double(number)
     }
 
     /// - Parameter keyPath: Decoding key path used to describe errors
     func decode(for keyPath: CodingKeyPath) throws -> Float {
-        try assertValue(isOneOf: Self.floats + Self.integers, at: keyPath)
+        try assert(isOneOf: Self.floats + Self.integers, decodingTo: Float.self, at: keyPath)
+        if SQLiteJSONBConfig.useFastFloatDecode,
+           let parsed = parseDouble(payload),
+           parsed.isFinite
+        {
+            let limit = Double(Float.greatestFiniteMagnitude)
+            if parsed <= limit && parsed >= -limit {
+                return Float(parsed)
+            }
+        }
+        return try assertValue(isOneOf: Self.floats + Self.integers, at: keyPath)
     }
 
     /// - Parameter keyPath: Decoding key path used to describe errors
@@ -254,5 +272,29 @@ extension JSONBValue {
             return T(exactly: Int64(magnitude))
         }
         return T(exactly: magnitude)
+    }
+
+    private func parseDouble(_ bytes: BytesView) -> Double? {
+        if bytes.isEmpty { return nil }
+        return withUnsafeTemporaryAllocation(of: CChar.self, capacity: bytes.count + 1) { buffer in
+            let wrote: Bool = bytes.withUnsafeBytes { raw in
+                guard let srcBase = raw.baseAddress else { return false }
+                if let destBase = buffer.baseAddress {
+                    _ = memcpy(destBase, srcBase, bytes.count)
+                } else {
+                    return false
+                }
+                buffer[bytes.count] = 0
+                return true
+            }
+            guard wrote, let base = buffer.baseAddress else { return nil }
+            errno = 0
+            var endPtr: UnsafeMutablePointer<CChar>?
+            let value = strtod(base, &endPtr)
+            if errno != 0 { return nil }
+            guard let end = endPtr, end != base else { return nil }
+            if end.pointee != 0 { return nil }
+            return value
+        }
     }
 }

@@ -127,13 +127,14 @@ struct SQLiteJSONBBenchmark {
         let unsafeUTF8 = envBool("SQLITEJSONB_UNSAFE_UTF8", default: true)
         let fastHeader = envBool("SQLITEJSONB_FAST_HEADER", default: true)
         let fastIntDecode = envBool("SQLITEJSONB_FAST_INT_DECODE", default: true)
+        let fastFloatDecode = envBool("SQLITEJSONB_FAST_FLOAT_DECODE", default: false)
 
         let payload = makePayload(rows: rows)
         let encoded = try JSONBEncoder.encode(payload)
 
         print("SQLiteJSONB benchmark")
         print("rows=\(rows) iterations=\(iterations) warmup=\(warmup) payload=\(encoded.count) bytes")
-        print("flags: direct=\(direct) unsafeUtf8=\(unsafeUTF8) fastHeader=\(fastHeader) fastIntDecode=\(fastIntDecode)")
+        print("flags: direct=\(direct) unsafeUtf8=\(unsafeUTF8) fastHeader=\(fastHeader) fastIntDecode=\(fastIntDecode) fastFloatDecode=\(fastFloatDecode)")
 
         try measure(name: "encode", iterations: iterations, warmup: warmup) {
             let data = try JSONBEncoder.encode(payload)
