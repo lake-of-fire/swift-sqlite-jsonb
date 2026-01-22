@@ -188,7 +188,7 @@ extension JSONB {
                         pairs.append((keyString, element))
                         if pairs.count > threshold {
                             var values: DecodeValues = [:]
-                            values.reserveCapacity(pairs.count)
+                            Self.reserveCapacityIfSupported(&values, pairs.count)
                             for (key, value) in pairs {
                                 values[key] = value
                             }
@@ -210,7 +210,7 @@ extension JSONB {
         func contains(_ key: String) -> Bool {
             switch storage {
                 case let .linear(values): return values.contains { $0.0 == key }
-                case let .dictionary(values): return values.index(forKey: key) != nil
+                case let .dictionary(values): return values[key] != nil
             }
         }
         func contains(_ key: some CodingKey) -> Bool { contains(key.stringValue) }
@@ -276,12 +276,18 @@ extension JSONB {
                 case let .dictionary(values): return values
                 case let .linear(values):
                     var dict: DecodeValues = [:]
-                    dict.reserveCapacity(values.count)
+                    Self.reserveCapacityIfSupported(&dict, values.count)
                     for (key, value) in values {
                         dict[key] = value
                     }
                     return dict
             }
+        }
+
+        private static func reserveCapacityIfSupported(_ dict: inout DecodeValues, _ capacity: Int) {
+            #if !DEBUG
+            dict.reserveCapacity(capacity)
+            #endif
         }
     }
 }
