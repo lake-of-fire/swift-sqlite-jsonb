@@ -21,6 +21,10 @@ let package = Package(
         .target(
             name: "SQLiteJSONB"
         ),
+        .executableTarget(
+            name: "SQLiteJSONBBenchmark",
+            dependencies: ["SQLiteJSONB"]
+        ),
         .testTarget(
             name: "SQLiteJSONBTests",
             dependencies: ["SQLiteJSONB"]

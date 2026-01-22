@@ -43,7 +43,7 @@ extension JSONBValue {
     /// - Parameter keyPath: Decoding key path used to describe errors
     func decode(for keyPath: CodingKeyPath) throws -> Date {
         let text = try assertText(decodingTo: Date.self, at: keyPath)
-        let formatter = ISO8601DateFormatter()
+        let formatter = Self.iso8601Formatter()
         if let value = formatter.date(from: text) { return value }
 
         throw DecodingError.typeMismatch(Date.self, DecodingError.Context(
@@ -67,7 +67,14 @@ extension JSONBValue {
     func decode<T>(for keyPath: CodingKeyPath) throws -> T
         where T: BinaryInteger & Decodable & LosslessStringConvertible
     {
-        try assertValue(isOneOf: Self.integers, at: keyPath)
+        try assert(isOneOf: Self.integers, decodingTo: T.self, at: keyPath)
+        if SQLiteJSONBConfig.useFastIntDecode,
+           let parsed = parseInteger64(payload),
+           let value = convertParsedInteger(parsed, as: T.self)
+        {
+            return value
+        }
+        return try assertValue(isOneOf: Self.integers, at: keyPath)
     }
 
     /// - Parameter keyPath: Decoding key path used to describe errors
@@ -177,6 +184,18 @@ extension JSONBValue {
 // MARK: - Support
 
 extension JSONBValue {
+    private static let iso8601FormatterKey = "SQLiteJSONB.ISO8601DateFormatter"
+
+    private static func iso8601Formatter() -> ISO8601DateFormatter {
+        let dictionary = Thread.current.threadDictionary
+        if let cached = dictionary[iso8601FormatterKey] as? ISO8601DateFormatter {
+            return cached
+        }
+        let formatter = ISO8601DateFormatter()
+        dictionary[iso8601FormatterKey] = formatter
+        return formatter
+    }
+
     /// JSONB float types
     private static let floats: [JSONBType] = [.float, .float5]
     /// JSONB string types
@@ -191,4 +210,49 @@ extension JSONBValue {
     ///
     /// A string type without a payload is an empty string
     private static let allowNoPayload: [JSONBType] = strings + neverHasPayload
+
+    private func parseInteger64(_ bytes: BytesView) -> (negative: Bool, magnitude: UInt64)? {
+        if bytes.isEmpty { return nil }
+        var index = bytes.startIndex
+        let end = bytes.endIndex
+        var negative = false
+
+        if bytes[index] == 0x2D { // '-'
+            negative = true
+            index += 1
+            if index == end { return nil }
+        }
+
+        var value: UInt64 = 0
+        while index < end {
+            let byte = bytes[index]
+            if byte < 0x30 || byte > 0x39 { return nil }
+            let digit = UInt64(byte - 0x30)
+            if value > (UInt64.max - digit) / 10 { return nil }
+            value = value * 10 + digit
+            index += 1
+        }
+
+        return (negative, value)
+    }
+
+    private func convertParsedInteger<T: BinaryInteger>(
+        _ parsed: (negative: Bool, magnitude: UInt64),
+        as _: T.Type
+    ) -> T? {
+        let magnitude = parsed.magnitude
+        if parsed.negative {
+            if !T.isSigned { return nil }
+            let maxPlusOne = UInt64(Int64.max) + 1
+            if magnitude > maxPlusOne { return nil }
+            let signed: Int64 = (magnitude == maxPlusOne) ? Int64.min : -Int64(magnitude)
+            return T(exactly: signed)
+        }
+
+        if T.isSigned {
+            if magnitude > UInt64(Int64.max) { return nil }
+            return T(exactly: Int64(magnitude))
+        }
+        return T(exactly: magnitude)
+    }
 }

@@ -114,17 +114,26 @@ extension JSONB {
         typealias DecodeValues = [String: DecodeElement?]
         #endif
         private var values: DecodeValues
+
         var keys: any Sequence<String> { values.keys }
         var count: Int { values.count }
 
         subscript(key: String) -> DecodeElement? {
-            get { values[key].flatMap(\.self) }
-            set { values[key] = newValue }
+            get {
+                values[key].flatMap(\.self)
+            }
+            set {
+                values[key] = newValue
+            }
         }
 
         subscript(key: some CodingKey) -> DecodeElement? {
-            get { values[key.stringValue].flatMap(\.self) }
-            set { values[key.stringValue] = newValue }
+            get {
+                values[key.stringValue].flatMap(\.self)
+            }
+            set {
+                values[key.stringValue] = newValue
+            }
         }
 
         init(values: DecodeValues = [:]) {
@@ -139,24 +148,26 @@ extension JSONB {
             }
         }
 
-        func contains(_ key: String) -> Bool { values.keys.contains(key) }
+        func contains(_ key: String) -> Bool {
+            values.keys.contains(key)
+        }
         func contains(_ key: some CodingKey) -> Bool { contains(key.stringValue) }
 
-        func type(for key: String) -> JSONBType? { values[key].flatMap(\.self)?.type }
+        func type(for key: String) -> JSONBType? { (try? value(for: key))?.type }
         func type(for key: some CodingKey) -> JSONBType? { type(for: key.stringValue) }
 
-        func decodeNil(_ key: some CodingKey) -> Bool? { self[key]?.decodeNil() }
+        func decodeNil(_ key: some CodingKey) -> Bool? { (try? value(for: key.stringValue))?.decodeNil() }
 
         func decode(_ key: some CodingKey, for keyPath: CodingKeyPath) throws -> Bool? {
-            try self[key]?.decode(for: keyPath)
+            try value(for: key.stringValue)?.decode(for: keyPath)
         }
 
         func decode(_ key: some CodingKey, for keyPath: CodingKeyPath) throws -> Data? {
-            try self[key]?.decode(for: keyPath)
+            try value(for: key.stringValue)?.decode(for: keyPath)
         }
 
         func decode(_ key: some CodingKey, for keyPath: CodingKeyPath) throws -> Date? {
-            try self[key]?.decode(for: keyPath)
+            try value(for: key.stringValue)?.decode(for: keyPath)
         }
 
 //        func decode(_ key: some CodingKey, for keyPath: CodingKeyPath) throws -> UUID? {
@@ -164,29 +175,33 @@ extension JSONB {
 //        }
 
         func decode(_ key: some CodingKey, for keyPath: CodingKeyPath) throws -> Float? {
-            try self[key]?.decode(for: keyPath)
+            try value(for: key.stringValue)?.decode(for: keyPath)
         }
 
         func decode(_ key: some CodingKey, for keyPath: CodingKeyPath) throws -> Double? {
-            try self[key]?.decode(for: keyPath)
+            try value(for: key.stringValue)?.decode(for: keyPath)
         }
 
         func decode(_ key: some CodingKey, for keyPath: CodingKeyPath) throws -> String? {
-            try self[key]?.decode(for: keyPath)
+            try value(for: key.stringValue)?.decode(for: keyPath)
         }
 
         func decode<T>(_ key: some CodingKey, for keyPath: CodingKeyPath) throws -> T?
             where T: BinaryInteger & Decodable & LosslessStringConvertible
         {
-            try self[key]?.decode(for: keyPath)
+            try value(for: key.stringValue)?.decode(for: keyPath)
         }
 
         func keyed(_ key: some CodingKey) throws -> KeyedDecodeElement? {
-            if let value = self[key] { try value.keyed } else { nil }
+            if let value = try value(for: key.stringValue) { try value.keyed } else { nil }
         }
 
         func unkeyed(_ key: some CodingKey) throws -> UnkeyedDecodeElement? {
-            if let value = self[key] { try value.unkeyed } else { nil }
+            if let value = try value(for: key.stringValue) { try value.unkeyed } else { nil }
+        }
+
+        private func value(for key: String) throws -> DecodeElement? {
+            values[key].flatMap(\.self)
         }
     }
 }
@@ -205,7 +220,9 @@ extension JSONB {
             set { values[index] = newValue }
         }
 
-        subscript(safe index: Int) -> DecodeElement? { values[safe: index] }
+        subscript(safe index: Int) -> DecodeElement? {
+            values[safe: index]
+        }
 
         var count: Int { values.count }
 
@@ -222,32 +239,32 @@ extension JSONB {
             return nil
         }
 
-        func type(for index: Int) -> JSONBType? { values[safe: index]?.type }
+        func type(for index: Int) -> JSONBType? { (try? element(at: index))?.type }
 
-        func decodeNil(at index: Int) -> Bool? { values[safe: index]?.decodeNil() }
+        func decodeNil(at index: Int) throws -> Bool? { try element(at: index)?.decodeNil() }
 
         func decode(at index: Int, for keyPath: CodingKeyPath) throws -> Bool? {
-            try values[safe: index]?.decode(for: keyPath)
+            try element(at: index)?.decode(for: keyPath)
         }
 
         func decode(at index: Int, for keyPath: CodingKeyPath) throws -> Data? {
-            try values[safe: index]?.decode(for: keyPath)
+            try element(at: index)?.decode(for: keyPath)
         }
 
         func decode(at index: Int, for keyPath: CodingKeyPath) throws -> Date? {
-            try values[safe: index]?.decode(for: keyPath)
+            try element(at: index)?.decode(for: keyPath)
         }
 
         func decode(at index: Int, for keyPath: CodingKeyPath) throws -> Float? {
-            try values[safe: index]?.decode(for: keyPath)
+            try element(at: index)?.decode(for: keyPath)
         }
 
         func decode(at index: Int, for keyPath: CodingKeyPath) throws -> Double? {
-            try values[safe: index]?.decode(for: keyPath)
+            try element(at: index)?.decode(for: keyPath)
         }
 
         func decode(at index: Int, for keyPath: CodingKeyPath) throws -> String? {
-            try values[safe: index]?.decode(for: keyPath)
+            try element(at: index)?.decode(for: keyPath)
         }
 
         @available(*, unavailable)
@@ -260,11 +277,15 @@ extension JSONB {
         }
 
         func keyed(at index: Int) throws -> KeyedDecodeElement? {
-            if let value = values[safe: index] { try value.keyed } else { nil }
+            if let value = try element(at: index) { try value.keyed } else { nil }
         }
 
         func unkeyed(at index: Int) throws -> UnkeyedDecodeElement? {
-            if let value = values[safe: index] { try value.unkeyed } else { nil }
+            if let value = try element(at: index) { try value.unkeyed } else { nil }
+        }
+
+        func element(at index: Int) throws -> DecodeElement? {
+            values[safe: index]
         }
     }
 }

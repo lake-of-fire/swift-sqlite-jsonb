@@ -80,9 +80,17 @@ extension JSONBDecoder {
         ///
         /// - returns: A new encoder to pass to `super.encode(to:)`.
         mutating func superDecoder() throws(DecodingError) -> any Decoder {
-            guard let value = element[safe: currentIndex] else {
-                throw notFound(JSONBDecoder.self)
+            let value: JSONB.DecodeElement?
+            do {
+                value = try element.element(at: currentIndex)
+            } catch {
+                throw DecodingError.dataCorrupted(DecodingError.Context(
+                    codingPath: codingPath,
+                    debugDescription: "Invalid JSONB array element at index \(currentIndex)",
+                    underlyingError: error
+                ))
             }
+            guard let value else { throw notFound(JSONBDecoder.self) }
             currentIndex += 1
             return JSONBDecoder(from: value, at: keyPath.appending(index: currentIndex))
         }
@@ -99,7 +107,7 @@ extension JSONBDecoder.UnkeyedContainer {
     ///
     /// [1]: https://github.com/swiftlang/swift-foundation/blob/a9dc42c58b6128ddb4f8867bf122372466841e58/Sources/FoundationEssentials/JSON/JSONDecoder.swift#L1547
     mutating func decodeNil() throws -> Bool {
-        if let value = element.decodeNil(at: currentIndex) {
+        if let value = try element.decodeNil(at: currentIndex) {
             currentIndex += 1
             return value
         }
@@ -155,7 +163,7 @@ extension JSONBDecoder.UnkeyedContainer {
     }
 
     mutating func decode<T>(_ type: T.Type) throws -> T where T: Decodable {
-        guard let value = element[safe: currentIndex] else { throw notFound(type) }
+        guard let value = try element.element(at: currentIndex) else { throw notFound(type) }
         let result = try T(from: JSONBDecoder(from: value, at: keyPath.appending(currentIndexKey)))
         currentIndex += 1
         return result

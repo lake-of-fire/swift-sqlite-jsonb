@@ -1,39 +1,38 @@
 import Foundation
 
 extension JSONBValue {
+    /// Size in bytes of the JSONB header for the given payload size.
+    static func headerSize(for payloadSize: Int) -> Int {
+        JSONBHeader.size(for: payloadSize)
+    }
+
     /// Add standard SQLite [JSONB header][1] to the payload
     ///
     /// ![Bytes](JSONB+Format.pdf)
     ///
     /// [1]: https://sqlite.org/jsonb.html#payload_size
     static func encode(_ type: JSONBType, with payload: Bytes) -> Bytes {
-        var firstByte = type.rawValue
-        /// Size of payload represented as bytes if too large to fit within 4 bits (meaning payload
-        /// is greater than 11 bytes)
-        let sizeBytes: Bytes
         let payloadSize = payload.count
+        let headerSize = headerSize(for: payloadSize)
+        var result = Bytes(repeating: 0, count: headerSize + payloadSize)
 
-        if payloadSize <= 11 {
-            // payload size fits within four bits alongside the type in the first byte
-            // shift size bits and combine (OR) with type value
-            firstByte |= (UInt8(payloadSize) << 4)
-            sizeBytes = []
-        } else if payloadSize <= 0xFF {
-            // this and following cases require additional bytes to store the payload size
-            firstByte |= 0xC0
-            sizeBytes = UInt8(payloadSize).bigEndian.bytes
-        } else if payloadSize <= 0xFFFF {
-            firstByte |= 0xD0
-            sizeBytes = UInt16(payloadSize).bigEndian.bytes
-        } else if payloadSize <= 0xFFFF_FFFF {
-            firstByte |= 0xE0
-            sizeBytes = UInt32(payloadSize).bigEndian.bytes
-        } else {
-            firstByte |= 0xF0
-            sizeBytes = payloadSize.bigEndian.bytes
+        result.withUnsafeMutableBytes { destRaw in
+            guard let baseAddress = destRaw.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+                return
+            }
+
+            let written = JSONBHeader.write(type: type, payloadSize: payloadSize, into: baseAddress)
+            if payloadSize > 0 {
+                payload.withUnsafeBytes { srcRaw in
+                    guard let srcBase = srcRaw.baseAddress else { return }
+                    let dest = baseAddress.advanced(by: written)
+                    let src = srcBase.assumingMemoryBound(to: UInt8.self)
+                    dest.update(from: src, count: payloadSize)
+                }
+            }
         }
 
-        return [firstByte] + sizeBytes + payload
+        return result
     }
 
     /// Add standard SQLite JSONB header to the payload
@@ -82,7 +81,32 @@ extension JSONBValue {
         }
     }
 
-    static func encode(_ value: String) -> Bytes { encode(.text, with: value) }
+    static func encode(_ value: String) -> Bytes {
+        if !SQLiteJSONBConfig.useUnsafeUTF8 {
+            return encode(.text, with: value)
+        }
+
+        let payloadSize = value.utf8.count
+        let headerLen = headerSize(for: payloadSize)
+        var result = Bytes(repeating: 0, count: headerLen + payloadSize)
+
+        result.withUnsafeMutableBytes { destRaw in
+            guard let baseAddress = destRaw.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+                return
+            }
+
+            let written = JSONBHeader.write(type: .text, payloadSize: payloadSize, into: baseAddress)
+            if payloadSize == 0 { return }
+
+            var index = 0
+            for byte in value.utf8 {
+                baseAddress[written + index] = byte
+                index += 1
+            }
+        }
+
+        return result
+    }
 
     /// Encode date as an [ISO 8601][1] string
     ///

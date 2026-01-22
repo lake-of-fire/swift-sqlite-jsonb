@@ -1,0 +1,38 @@
+[tools]
+# Keep empty for now; rely on system Swift toolchain.
+
+[tasks.bench]
+description = "Run SQLiteJSONB microbenchmarks (release)"
+run = "swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
+
+[tasks.bench_fast]
+description = "Bench with direct builder + unsafe UTF8 + fast header"
+run = "SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=1 SQLITEJSONB_FAST_HEADER=1 SQLITEJSONB_FAST_INT_DECODE=1 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
+
+[tasks.bench_safe_utf8]
+description = "Bench with safe UTF8 copy (no unsafe contiguous UTF8)"
+run = "SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=0 SQLITEJSONB_FAST_HEADER=1 SQLITEJSONB_FAST_INT_DECODE=1 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
+
+[tasks.bench_baseline]
+description = "Bench with legacy builder (no direct buffer write)"
+run = "SQLITEJSONB_DIRECT_BUILDER=0 SQLITEJSONB_UNSAFE_UTF8=0 SQLITEJSONB_FAST_HEADER=1 SQLITEJSONB_FAST_INT_DECODE=1 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
+
+[tasks.bench_direct_off]
+description = "Bench with direct builder disabled (only toggle direct)"
+run = "SQLITEJSONB_DIRECT_BUILDER=0 SQLITEJSONB_UNSAFE_UTF8=1 SQLITEJSONB_FAST_HEADER=1 SQLITEJSONB_FAST_INT_DECODE=1 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
+
+[tasks.bench_swiftheader]
+description = "Bench with slow Swift header encoding"
+run = "SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=1 SQLITEJSONB_FAST_HEADER=0 SQLITEJSONB_FAST_INT_DECODE=1 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
+
+[tasks.bench_fast_int_decode_off]
+description = "Bench with fast integer decode disabled"
+run = "SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=1 SQLITEJSONB_FAST_HEADER=1 SQLITEJSONB_FAST_INT_DECODE=0 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
+
+[tasks.bench_matrix]
+description = "Run baseline and single-flag toggles in sequence"
+run = "BENCH_ROWS=1000 BENCH_ITERS=200 BENCH_WARMUP=20 ./scripts/bench_flags.sh"
+
+[tasks.profile]
+description = "Record a Time Profiler trace for the benchmark"
+run = "OUT=\"/tmp/SQLiteJSONBBenchmark-$(date +%Y%m%d-%H%M%S).trace\"; BIN=$(swift build -c release --show-bin-path); xcrun xctrace record --template 'Time Profiler' --output \"$OUT\" --launch -- $BIN/SQLiteJSONBBenchmark --iterations 50 --rows 1000 --warmup 10; echo \"trace: $OUT\""
