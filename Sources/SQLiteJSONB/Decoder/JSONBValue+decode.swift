@@ -27,22 +27,13 @@ extension JSONBValue {
     /// - Parameter keyPath: Decoding key path used to describe errors
     func decode() throws -> String {
         if payload.isEmpty { return "" }
-        if SQLiteJSONBConfig.useFastStringDecode {
-            return String(decoding: payload, as: UTF8.self)
-        }
-        if let text = String(bytes: payload, encoding: .utf8) { return text }
-        throw JSONBError.invalidUTF8(payload)
+        return String(decoding: payload, as: UTF8.self)
     }
 
     /// - Parameter keyPath: Decoding key path used to describe errors
     func decode(for keyPath: CodingKeyPath) throws -> Double {
         try assert(isOneOf: Self.floats + Self.integers, decodingTo: Double.self, at: keyPath)
-        if SQLiteJSONBConfig.useFastFloatDecode,
-           let parsed = parseDouble(payload),
-           parsed.isFinite
-        {
-            return parsed
-        }
+        if let parsed = parseDouble(payload), parsed.isFinite { return parsed }
         let number: Float = try assertValue(isOneOf: Self.floats + Self.integers, at: keyPath)
         return Double(number)
     }
@@ -50,10 +41,7 @@ extension JSONBValue {
     /// - Parameter keyPath: Decoding key path used to describe errors
     func decode(for keyPath: CodingKeyPath) throws -> Float {
         try assert(isOneOf: Self.floats + Self.integers, decodingTo: Float.self, at: keyPath)
-        if SQLiteJSONBConfig.useFastFloatDecode,
-           let parsed = parseDouble(payload),
-           parsed.isFinite
-        {
+        if let parsed = parseDouble(payload), parsed.isFinite {
             let limit = Double(Float.greatestFiniteMagnitude)
             if parsed <= limit && parsed >= -limit {
                 return Float(parsed)
@@ -90,12 +78,6 @@ extension JSONBValue {
         where T: BinaryInteger & Decodable & LosslessStringConvertible
     {
         try assert(isOneOf: Self.integers, decodingTo: T.self, at: keyPath)
-        if SQLiteJSONBConfig.useFastIntDecode,
-           let parsed = parseInteger64(payload),
-           let value = convertParsedInteger(parsed, as: T.self)
-        {
-            return value
-        }
         return try assertValue(isOneOf: Self.integers, at: keyPath)
     }
 
@@ -171,15 +153,7 @@ extension JSONBValue {
     ) throws -> String {
         try assert(isOneOf: jsonTypes, decodingTo: targetType, at: keyPath)
         if payload.isEmpty { return "" }
-        if SQLiteJSONBConfig.useFastStringDecode {
-            return String(decoding: payload, as: UTF8.self)
-        }
-        if let text = String(bytes: payload, encoding: .utf8) { return text }
-
-        throw DecodingError.typeMismatch(String.self, DecodingError.Context(
-            codingPath: keyPath.path,
-            debugDescription: "Invalid UTF-8 bytes"
-        ))
+        return String(decoding: payload, as: UTF8.self)
     }
 
     /// - Parameters:
@@ -235,51 +209,6 @@ extension JSONBValue {
     ///
     /// A string type without a payload is an empty string
     private static let allowNoPayload: [JSONBType] = strings + neverHasPayload
-
-    private func parseInteger64(_ bytes: BytesView) -> (negative: Bool, magnitude: UInt64)? {
-        if bytes.isEmpty { return nil }
-        var index = bytes.startIndex
-        let end = bytes.endIndex
-        var negative = false
-
-        if bytes[index] == 0x2D { // '-'
-            negative = true
-            index += 1
-            if index == end { return nil }
-        }
-
-        var value: UInt64 = 0
-        while index < end {
-            let byte = bytes[index]
-            if byte < 0x30 || byte > 0x39 { return nil }
-            let digit = UInt64(byte - 0x30)
-            if value > (UInt64.max - digit) / 10 { return nil }
-            value = value * 10 + digit
-            index += 1
-        }
-
-        return (negative, value)
-    }
-
-    private func convertParsedInteger<T: BinaryInteger>(
-        _ parsed: (negative: Bool, magnitude: UInt64),
-        as _: T.Type
-    ) -> T? {
-        let magnitude = parsed.magnitude
-        if parsed.negative {
-            if !T.isSigned { return nil }
-            let maxPlusOne = UInt64(Int64.max) + 1
-            if magnitude > maxPlusOne { return nil }
-            let signed: Int64 = (magnitude == maxPlusOne) ? Int64.min : -Int64(magnitude)
-            return T(exactly: signed)
-        }
-
-        if T.isSigned {
-            if magnitude > UInt64(Int64.max) { return nil }
-            return T(exactly: Int64(magnitude))
-        }
-        return T(exactly: magnitude)
-    }
 
     private func parseDouble(_ bytes: BytesView) -> Double? {
         if bytes.isEmpty { return nil }

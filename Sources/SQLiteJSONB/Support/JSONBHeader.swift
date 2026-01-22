@@ -14,10 +14,7 @@ enum JSONBHeader {
         payloadSize: Int,
         into base: UnsafeMutablePointer<UInt8>
     ) -> Int {
-        if SQLiteJSONBConfig.useFastHeader {
-            return writeFast(type: type, payloadSize: payloadSize, into: base)
-        }
-        return writeSlow(type: type, payloadSize: payloadSize, into: base)
+        writeFast(type: type, payloadSize: payloadSize, into: base)
     }
 
     @inline(__always)
@@ -63,39 +60,4 @@ enum JSONBHeader {
         return 9
     }
 
-    private static func writeSlow(
-        type: JSONBType,
-        payloadSize: Int,
-        into base: UnsafeMutablePointer<UInt8>
-    ) -> Int {
-        var firstByte = type.rawValue
-        let sizeBytes: Bytes
-
-        if payloadSize <= 11 {
-            firstByte |= (UInt8(payloadSize) << 4)
-            sizeBytes = []
-        } else if payloadSize <= 0xFF {
-            firstByte |= 0xC0
-            sizeBytes = UInt8(payloadSize).bigEndian.bytes
-        } else if payloadSize <= 0xFFFF {
-            firstByte |= 0xD0
-            sizeBytes = UInt16(payloadSize).bigEndian.bytes
-        } else if payloadSize <= 0xFFFF_FFFF {
-            firstByte |= 0xE0
-            sizeBytes = UInt32(payloadSize).bigEndian.bytes
-        } else {
-            firstByte |= 0xF0
-            sizeBytes = payloadSize.bigEndian.bytes
-        }
-
-        base[0] = firstByte
-        if !sizeBytes.isEmpty {
-            sizeBytes.withUnsafeBytes { raw in
-                if let srcBase = raw.baseAddress?.assumingMemoryBound(to: UInt8.self) {
-                    base.advanced(by: 1).update(from: srcBase, count: sizeBytes.count)
-                }
-            }
-        }
-        return 1 + sizeBytes.count
-    }
 }

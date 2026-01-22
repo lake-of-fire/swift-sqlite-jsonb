@@ -6,52 +6,24 @@ description = "Run SQLiteJSONB microbenchmarks (release)"
 run = "swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
 
 [tasks.bench_fast]
-description = "Bench with direct builder + unsafe UTF8 + fast header"
-run = "SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=1 SQLITEJSONB_FAST_HEADER=1 SQLITEJSONB_FAST_INT_DECODE=1 SQLITEJSONB_FAST_FLOAT_DECODE=1 SQLITEJSONB_FAST_STRING_DECODE=1 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
+description = "Bench with direct builder + unsafe UTF8"
+run = "SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=1 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
 
 [tasks.bench_safe_utf8]
 description = "Bench with safe UTF8 copy (no unsafe contiguous UTF8)"
-run = "SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=0 SQLITEJSONB_FAST_HEADER=1 SQLITEJSONB_FAST_INT_DECODE=1 SQLITEJSONB_FAST_FLOAT_DECODE=1 SQLITEJSONB_FAST_STRING_DECODE=1 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
+run = "SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=0 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
 
 [tasks.bench_baseline]
 description = "Bench with legacy builder (no direct buffer write)"
-run = "SQLITEJSONB_DIRECT_BUILDER=0 SQLITEJSONB_UNSAFE_UTF8=0 SQLITEJSONB_FAST_HEADER=1 SQLITEJSONB_FAST_INT_DECODE=1 SQLITEJSONB_FAST_FLOAT_DECODE=1 SQLITEJSONB_FAST_STRING_DECODE=1 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
+run = "SQLITEJSONB_DIRECT_BUILDER=0 SQLITEJSONB_UNSAFE_UTF8=0 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
 
 [tasks.bench_direct_off]
 description = "Bench with direct builder disabled (only toggle direct)"
-run = "SQLITEJSONB_DIRECT_BUILDER=0 SQLITEJSONB_UNSAFE_UTF8=1 SQLITEJSONB_FAST_HEADER=1 SQLITEJSONB_FAST_INT_DECODE=1 SQLITEJSONB_FAST_FLOAT_DECODE=1 SQLITEJSONB_FAST_STRING_DECODE=1 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
-
-[tasks.bench_swiftheader]
-description = "Bench with slow Swift header encoding"
-run = "SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=1 SQLITEJSONB_FAST_HEADER=0 SQLITEJSONB_FAST_INT_DECODE=1 SQLITEJSONB_FAST_FLOAT_DECODE=1 SQLITEJSONB_FAST_STRING_DECODE=1 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
-
-[tasks.bench_fast_int_decode_off]
-description = "Bench with fast integer decode disabled"
-run = "SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=1 SQLITEJSONB_FAST_HEADER=1 SQLITEJSONB_FAST_INT_DECODE=0 SQLITEJSONB_FAST_FLOAT_DECODE=1 SQLITEJSONB_FAST_STRING_DECODE=1 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
-
-[tasks.bench_fast_float_decode_off]
-description = "Bench with fast float decode disabled"
-run = "SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=1 SQLITEJSONB_FAST_HEADER=1 SQLITEJSONB_FAST_INT_DECODE=1 SQLITEJSONB_FAST_FLOAT_DECODE=0 SQLITEJSONB_FAST_STRING_DECODE=1 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
-
-[tasks.bench_fast_string_decode_off]
-description = "Bench with fast string decode disabled"
-run = "SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=1 SQLITEJSONB_FAST_HEADER=1 SQLITEJSONB_FAST_INT_DECODE=1 SQLITEJSONB_FAST_FLOAT_DECODE=1 SQLITEJSONB_FAST_STRING_DECODE=0 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
-
-[tasks.bench_small_object_linear_search_off]
-description = "Bench with small-object linear search disabled"
-run = "SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=1 SQLITEJSONB_FAST_HEADER=1 SQLITEJSONB_FAST_INT_DECODE=1 SQLITEJSONB_FAST_FLOAT_DECODE=1 SQLITEJSONB_FAST_STRING_DECODE=1 SQLITEJSONB_SMALL_OBJECT_LINEAR_SEARCH=0 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
+run = "SQLITEJSONB_DIRECT_BUILDER=0 SQLITEJSONB_UNSAFE_UTF8=1 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20"
 
 [tasks.bench_strings]
 description = "Bench string-heavy payload"
-run = "BENCH_CASE=strings SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=1 SQLITEJSONB_FAST_HEADER=1 SQLITEJSONB_FAST_INT_DECODE=1 SQLITEJSONB_FAST_FLOAT_DECODE=1 SQLITEJSONB_FAST_STRING_DECODE=1 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20 --case strings"
-
-[tasks.bench_strings_fast_string_off]
-description = "Bench string-heavy payload with fast string decode disabled"
-run = "BENCH_CASE=strings SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=1 SQLITEJSONB_FAST_HEADER=1 SQLITEJSONB_FAST_INT_DECODE=1 SQLITEJSONB_FAST_FLOAT_DECODE=1 SQLITEJSONB_FAST_STRING_DECODE=0 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20 --case strings"
-
-[tasks.bench_strings_small_object_linear_search_off]
-description = "Bench string-heavy payload with small-object linear search disabled"
-run = "BENCH_CASE=strings SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=1 SQLITEJSONB_FAST_HEADER=1 SQLITEJSONB_FAST_INT_DECODE=1 SQLITEJSONB_FAST_FLOAT_DECODE=1 SQLITEJSONB_FAST_STRING_DECODE=1 SQLITEJSONB_SMALL_OBJECT_LINEAR_SEARCH=0 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20 --case strings"
+run = "BENCH_CASE=strings SQLITEJSONB_DIRECT_BUILDER=1 SQLITEJSONB_UNSAFE_UTF8=1 swift run -c release SQLiteJSONBBenchmark --iterations 200 --rows 1000 --warmup 20 --case strings"
 
 [tasks.bench_matrix]
 description = "Run baseline and single-flag toggles in sequence"

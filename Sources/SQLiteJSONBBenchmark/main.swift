@@ -226,19 +226,16 @@ struct SQLiteJSONBBenchmark {
 
         let direct = envBool("SQLITEJSONB_DIRECT_BUILDER", default: true)
         let unsafeUTF8 = envBool("SQLITEJSONB_UNSAFE_UTF8", default: true)
-        let fastHeader = envBool("SQLITEJSONB_FAST_HEADER", default: true)
-        let fastIntDecode = envBool("SQLITEJSONB_FAST_INT_DECODE", default: true)
-        let fastFloatDecode = envBool("SQLITEJSONB_FAST_FLOAT_DECODE", default: true)
-        let fastStringDecode = envBool("SQLITEJSONB_FAST_STRING_DECODE", default: true)
-        let smallObjectLinearSearch = envBool("SQLITEJSONB_SMALL_OBJECT_LINEAR_SEARCH", default: true)
-        let smallObjectLinearSearchThreshold = ProcessInfo.processInfo.environment["SQLITEJSONB_SMALL_OBJECT_LINEAR_SEARCH_THRESHOLD"].flatMap(Int.init) ?? 8
+        let fastHeader = true
+        let fastFloatDecode = true
+        let fastStringDecode = true
 
         let payload = makePayload(rows: rows, benchCase: benchCase)
         let encoded = try JSONBEncoder.encode(payload)
 
         print("SQLiteJSONB benchmark")
         print("case=\(benchCase.rawValue) mode=\(benchMode.rawValue) rows=\(rows) iterations=\(iterations) warmup=\(warmup) payload=\(encoded.count) bytes")
-        print("flags: direct=\(direct) unsafeUtf8=\(unsafeUTF8) fastHeader=\(fastHeader) fastIntDecode=\(fastIntDecode) fastFloatDecode=\(fastFloatDecode) fastStringDecode=\(fastStringDecode) smallObjectLinearSearch=\(smallObjectLinearSearch) smallObjectThreshold=\(smallObjectLinearSearchThreshold)")
+        print("flags: direct=\(direct) unsafeUtf8=\(unsafeUTF8) fastHeader=\(fastHeader) fastFloatDecode=\(fastFloatDecode) fastStringDecode=\(fastStringDecode) smallObjectLinearSearch=true smallObjectThreshold=8")
 
         if benchMode == .both || benchMode == .encode {
             try measure(name: "encode", iterations: iterations, warmup: warmup) {

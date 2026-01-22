@@ -169,31 +169,38 @@ extension JSONB {
 
         init?(from jsonb: JSONBValue) throws {
             if jsonb.type == .object {
-                if SQLiteJSONBConfig.useSmallObjectLinearSearch {
-                    let threshold = max(1, SQLiteJSONBConfig.smallObjectLinearSearchThreshold)
-                    var pairs: [(String, DecodeElement?)] = []
-                    var index = jsonb.startIndex
-                    while index < jsonb.endIndex - 1 {
-                        let key = try JSONBValue(from: jsonb.payload[index...])
-                        let value = try JSONBValue(from: jsonb.payload[key.endIndex...])
+                let threshold = max(1, SQLiteJSONBConfig.smallObjectLinearSearchThreshold)
+                var pairs: [(String, DecodeElement?)] = []
+                pairs.reserveCapacity(threshold)
+                var dict: DecodeValues? = nil
+                var index = jsonb.startIndex
+                while index < jsonb.endIndex - 1 {
+                    let key = try JSONBValue(from: jsonb.payload[index...])
+                    let value = try JSONBValue(from: jsonb.payload[key.endIndex...])
 
-                        index = value.endIndex
-                        let keyString = try key.decode()
-                        pairs.append((keyString, DecodeElement(from: value)))
-                    }
-                    if pairs.count <= threshold {
-                        storage = .linear(pairs)
+                    index = value.endIndex
+                    let keyString = try key.decode()
+                    let element = DecodeElement(from: value)
+
+                    if dict != nil {
+                        dict![keyString] = element
                     } else {
-                        var values: DecodeValues = [:]
-                        values.reserveCapacity(pairs.count)
-                        for (key, value) in pairs {
-                            values[key] = value
+                        pairs.append((keyString, element))
+                        if pairs.count > threshold {
+                            var values: DecodeValues = [:]
+                            values.reserveCapacity(pairs.count)
+                            for (key, value) in pairs {
+                                values[key] = value
+                            }
+                            dict = values
+                            pairs.removeAll(keepingCapacity: false)
                         }
-                        storage = .dictionary(values)
                     }
-                } else {
-                    let values = try jsonb.object.mapValues { DecodeElement(from: $0) }
+                }
+                if let values = dict {
                     storage = .dictionary(values)
+                } else {
+                    storage = .linear(pairs)
                 }
             } else {
                 return nil
