@@ -26,6 +26,10 @@ extension JSONBValue {
 
     /// - Parameter keyPath: Decoding key path used to describe errors
     func decode() throws -> String {
+        if payload.isEmpty { return "" }
+        if SQLiteJSONBConfig.useFastStringDecode {
+            return String(decoding: payload, as: UTF8.self)
+        }
         if let text = String(bytes: payload, encoding: .utf8) { return text }
         throw JSONBError.invalidUTF8(payload)
     }
@@ -167,6 +171,9 @@ extension JSONBValue {
     ) throws -> String {
         try assert(isOneOf: jsonTypes, decodingTo: targetType, at: keyPath)
         if payload.isEmpty { return "" }
+        if SQLiteJSONBConfig.useFastStringDecode {
+            return String(decoding: payload, as: UTF8.self)
+        }
         if let text = String(bytes: payload, encoding: .utf8) { return text }
 
         throw DecodingError.typeMismatch(String.self, DecodingError.Context(
@@ -297,4 +304,5 @@ extension JSONBValue {
             return value
         }
     }
+
 }

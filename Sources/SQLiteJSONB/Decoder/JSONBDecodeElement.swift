@@ -113,43 +113,98 @@ extension JSONB {
         #else
         typealias DecodeValues = [String: DecodeElement?]
         #endif
-        private var values: DecodeValues
+        private enum Storage {
+            case linear([(String, DecodeElement?)])
+            case dictionary(DecodeValues)
+        }
+        private var storage: Storage
 
-        var keys: any Sequence<String> { values.keys }
-        var count: Int { values.count }
+        var keys: any Sequence<String> {
+            switch storage {
+                case let .linear(values): values.map(\.0)
+                case let .dictionary(values): values.keys
+            }
+        }
+        var count: Int {
+            switch storage {
+                case let .linear(values): values.count
+                case let .dictionary(values): values.count
+            }
+        }
 
         subscript(key: String) -> DecodeElement? {
             get {
-                values[key].flatMap(\.self)
+                switch storage {
+                    case let .linear(values):
+                        return values.first { $0.0 == key }?.1
+                    case let .dictionary(values):
+                        return values[key].flatMap(\.self)
+                }
             }
             set {
-                values[key] = newValue
+                switch storage {
+                    case .linear:
+                        var values = materializeDictionary()
+                        values[key] = newValue
+                        storage = .dictionary(values)
+                    case var .dictionary(values):
+                        values[key] = newValue
+                        storage = .dictionary(values)
+                }
             }
         }
 
         subscript(key: some CodingKey) -> DecodeElement? {
             get {
-                values[key.stringValue].flatMap(\.self)
+                self[key.stringValue]
             }
             set {
-                values[key.stringValue] = newValue
+                self[key.stringValue] = newValue
             }
         }
 
         init(values: DecodeValues = [:]) {
-            self.values = values
+            self.storage = .dictionary(values)
         }
 
         init?(from jsonb: JSONBValue) throws {
             if jsonb.type == .object {
-                values = try jsonb.object.mapValues { DecodeElement(from: $0) }
+                if SQLiteJSONBConfig.useSmallObjectLinearSearch {
+                    let threshold = max(1, SQLiteJSONBConfig.smallObjectLinearSearchThreshold)
+                    var pairs: [(String, DecodeElement?)] = []
+                    var index = jsonb.startIndex
+                    while index < jsonb.endIndex - 1 {
+                        let key = try JSONBValue(from: jsonb.payload[index...])
+                        let value = try JSONBValue(from: jsonb.payload[key.endIndex...])
+
+                        index = value.endIndex
+                        let keyString = try key.decode()
+                        pairs.append((keyString, DecodeElement(from: value)))
+                    }
+                    if pairs.count <= threshold {
+                        storage = .linear(pairs)
+                    } else {
+                        var values: DecodeValues = [:]
+                        values.reserveCapacity(pairs.count)
+                        for (key, value) in pairs {
+                            values[key] = value
+                        }
+                        storage = .dictionary(values)
+                    }
+                } else {
+                    let values = try jsonb.object.mapValues { DecodeElement(from: $0) }
+                    storage = .dictionary(values)
+                }
             } else {
                 return nil
             }
         }
 
         func contains(_ key: String) -> Bool {
-            values.keys.contains(key)
+            switch storage {
+                case let .linear(values): return values.contains { $0.0 == key }
+                case let .dictionary(values): return values.index(forKey: key) != nil
+            }
         }
         func contains(_ key: some CodingKey) -> Bool { contains(key.stringValue) }
 
@@ -201,7 +256,25 @@ extension JSONB {
         }
 
         private func value(for key: String) throws -> DecodeElement? {
-            values[key].flatMap(\.self)
+            switch storage {
+                case let .linear(values):
+                    return values.first { $0.0 == key }?.1
+                case let .dictionary(values):
+                    return values[key].flatMap(\.self)
+            }
+        }
+
+        private func materializeDictionary() -> DecodeValues {
+            switch storage {
+                case let .dictionary(values): return values
+                case let .linear(values):
+                    var dict: DecodeValues = [:]
+                    dict.reserveCapacity(values.count)
+                    for (key, value) in values {
+                        dict[key] = value
+                    }
+                    return dict
+            }
         }
     }
 }

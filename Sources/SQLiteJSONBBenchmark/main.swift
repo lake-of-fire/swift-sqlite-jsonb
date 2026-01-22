@@ -41,7 +41,67 @@ private func parseArgs() -> [ArgKey: Int] {
     return result
 }
 
-private func makePayload(rows: Int) -> Payload {
+private enum BenchCase: String {
+    case `default` = "default"
+    case strings = "strings"
+}
+
+private enum BenchMode: String {
+    case both = "both"
+    case encode = "encode"
+    case decode = "decode"
+}
+
+private func parseBenchCase() -> BenchCase {
+    if let env = ProcessInfo.processInfo.environment["BENCH_CASE"],
+       let value = BenchCase(rawValue: env.lowercased()) {
+        return value
+    }
+    var index = 1
+    while index < CommandLine.arguments.count {
+        let arg = CommandLine.arguments[index]
+        if arg == "--case" {
+            let valueIndex = index + 1
+            if valueIndex < CommandLine.arguments.count,
+               let value = BenchCase(rawValue: CommandLine.arguments[valueIndex].lowercased()) {
+                return value
+            }
+        }
+        index += 1
+    }
+    return .default
+}
+
+private func parseBenchMode() -> BenchMode {
+    if let env = ProcessInfo.processInfo.environment["BENCH_MODE"],
+       let value = BenchMode(rawValue: env.lowercased()) {
+        return value
+    }
+    var index = 1
+    while index < CommandLine.arguments.count {
+        let arg = CommandLine.arguments[index]
+        if arg == "--mode" {
+            let valueIndex = index + 1
+            if valueIndex < CommandLine.arguments.count,
+               let value = BenchMode(rawValue: CommandLine.arguments[valueIndex].lowercased()) {
+                return value
+            }
+        }
+        index += 1
+    }
+    return .both
+}
+
+private func makePayload(rows: Int, benchCase: BenchCase) -> Payload {
+    switch benchCase {
+    case .default:
+        return makeDefaultPayload(rows: rows)
+    case .strings:
+        return makeStringHeavyPayload(rows: rows)
+    }
+}
+
+private func makeDefaultPayload(rows: Int) -> Payload {
     let tags = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf"]
     let metadata = [
         "source": "benchmark",
@@ -68,6 +128,45 @@ private func makePayload(rows: Int) -> Payload {
         items: items,
         createdAt: Date(timeIntervalSince1970: 1_694_630_400),
         title: "Swift SQLite JSONB Benchmark"
+    )
+}
+
+private func makeStringHeavyPayload(rows: Int) -> Payload {
+    let base = String(repeating: "lorem-ipsum-dolor-sit-amet-", count: 6)
+    let tags = [
+        base + "alpha",
+        base + "bravo",
+        base + "charlie",
+        base + "delta",
+        base + "echo",
+        base + "foxtrot",
+        base + "golf",
+    ]
+
+    var metadata: [String: String] = [:]
+    metadata.reserveCapacity(24)
+    for index in 0..<24 {
+        metadata["meta_\(index)"] = base + "value-\(index)"
+    }
+
+    var items: [Item] = []
+    items.reserveCapacity(rows)
+    for index in 0..<rows {
+        let item = Item(
+            id: index,
+            name: base + "item-\(index)",
+            tags: [tags[index % tags.count], tags[(index + 2) % tags.count]],
+            scores: [Double(index) * 0.25, Double(index % 7) * 1.75, Double(index % 3)],
+            metadata: metadata,
+            active: index % 2 == 0
+        )
+        items.append(item)
+    }
+
+    return Payload(
+        items: items,
+        createdAt: Date(timeIntervalSince1970: 1_694_630_400),
+        title: base + "swift-sqlite-jsonb-benchmark"
     )
 }
 
@@ -122,28 +221,37 @@ struct SQLiteJSONBBenchmark {
         let iterations = args[.iterations] ?? 200
         let rows = args[.rows] ?? 1_000
         let warmup = args[.warmup] ?? 20
+        let benchCase = parseBenchCase()
+        let benchMode = parseBenchMode()
 
         let direct = envBool("SQLITEJSONB_DIRECT_BUILDER", default: true)
         let unsafeUTF8 = envBool("SQLITEJSONB_UNSAFE_UTF8", default: true)
         let fastHeader = envBool("SQLITEJSONB_FAST_HEADER", default: true)
         let fastIntDecode = envBool("SQLITEJSONB_FAST_INT_DECODE", default: true)
-        let fastFloatDecode = envBool("SQLITEJSONB_FAST_FLOAT_DECODE", default: false)
+        let fastFloatDecode = envBool("SQLITEJSONB_FAST_FLOAT_DECODE", default: true)
+        let fastStringDecode = envBool("SQLITEJSONB_FAST_STRING_DECODE", default: true)
+        let smallObjectLinearSearch = envBool("SQLITEJSONB_SMALL_OBJECT_LINEAR_SEARCH", default: true)
+        let smallObjectLinearSearchThreshold = ProcessInfo.processInfo.environment["SQLITEJSONB_SMALL_OBJECT_LINEAR_SEARCH_THRESHOLD"].flatMap(Int.init) ?? 8
 
-        let payload = makePayload(rows: rows)
+        let payload = makePayload(rows: rows, benchCase: benchCase)
         let encoded = try JSONBEncoder.encode(payload)
 
         print("SQLiteJSONB benchmark")
-        print("rows=\(rows) iterations=\(iterations) warmup=\(warmup) payload=\(encoded.count) bytes")
-        print("flags: direct=\(direct) unsafeUtf8=\(unsafeUTF8) fastHeader=\(fastHeader) fastIntDecode=\(fastIntDecode) fastFloatDecode=\(fastFloatDecode)")
+        print("case=\(benchCase.rawValue) mode=\(benchMode.rawValue) rows=\(rows) iterations=\(iterations) warmup=\(warmup) payload=\(encoded.count) bytes")
+        print("flags: direct=\(direct) unsafeUtf8=\(unsafeUTF8) fastHeader=\(fastHeader) fastIntDecode=\(fastIntDecode) fastFloatDecode=\(fastFloatDecode) fastStringDecode=\(fastStringDecode) smallObjectLinearSearch=\(smallObjectLinearSearch) smallObjectThreshold=\(smallObjectLinearSearchThreshold)")
 
-        try measure(name: "encode", iterations: iterations, warmup: warmup) {
-            let data = try JSONBEncoder.encode(payload)
-            blackhole(data)
+        if benchMode == .both || benchMode == .encode {
+            try measure(name: "encode", iterations: iterations, warmup: warmup) {
+                let data = try JSONBEncoder.encode(payload)
+                blackhole(data)
+            }
         }
 
-        try measure(name: "decode", iterations: iterations, warmup: warmup) {
-            let decoded: Payload = try JSONBDecoder.decode(encoded)
-            blackhole(decoded.items.count)
+        if benchMode == .both || benchMode == .decode {
+            try measure(name: "decode", iterations: iterations, warmup: warmup) {
+                let decoded: Payload = try JSONBDecoder.decode(encoded)
+                blackhole(decoded.items.count)
+            }
         }
 
         // JSONBValue initializer is internal; decode benchmark already includes parsing.
